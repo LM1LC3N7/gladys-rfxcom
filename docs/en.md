@@ -1,61 +1,189 @@
-# Demo Devices Template
+# RFXCOM RFXtrx integration
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+Connect an RFXCOM **RFXtrx433**, **RFXtrx433E** or **RFXtrx433XL** to
+Gladys: Oregon Scientific weather probes, OWL energy meters, door, motion and
+smoke detectors, remotes and wall switches (Chacon DiO / KlikAanKlikUit, X10,
+Blyss…), and the receivers the RFXtrx drives (Chacon DiO plugs and modules,
+lights, Somfy RTS shutters).
 
-## What you get
+> Unofficial integration, not affiliated with RFXCOM.
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+## 1. Expose the RFXtrx over TCP
 
-## Configuration
+The integration runs in a sandboxed container that **cannot open a USB
+port**. The RFXtrx stays plugged into a machine of your network (the Gladys
+machine, a Raspberry Pi…), and **ser2net** exposes its serial port on the
+network. The bytes are exactly those of the serial port, at **38400 bauds**.
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+Find the stable name of the RFXtrx (it does not change when other USB devices
+are plugged in):
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+```bash
+ls -l /dev/serial/by-id/
+# usb-RFXCOM_RFXtrx433XL_XXXXXXXX-if00-port0 -> ../../ttyUSB0
+```
 
-## Actions
+### With ser2net 4 (Debian 11+, Ubuntu 22.04+, Raspberry Pi OS)
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+```bash
+sudo apt install ser2net
+```
 
-## Scenes
+`/etc/ser2net.yaml`:
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+```yaml
+connection: &rfxtrx
+  accepter: tcp,4001
+  enable: on
+  options:
+    kickolduser: true
+  connector: serialdev,/dev/serial/by-id/usb-RFXCOM_RFXtrx433XL_XXXXXXXX-if00-port0,38400n81,local
+```
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+Replace the `/dev/serial/by-id/...` path with yours, then:
 
-## Dashboard
+```bash
+sudo systemctl restart ser2net
+```
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+### With ser2net 3 (older distributions)
+
+`/etc/ser2net.conf`:
+
+```
+4001:raw:0:/dev/serial/by-id/usb-RFXCOM_RFXtrx433XL_XXXXXXXX-if00-port0:38400 8DATABITS NONE 1STOPBIT
+```
+
+### With socat (quick test)
+
+```bash
+socat TCP-LISTEN:4001,reuseaddr,fork FILE:/dev/serial/by-id/usb-RFXCOM_RFXtrx433XL_XXXXXXXX-if00-port0,b38400,raw,echo=0
+```
+
+> The bridge has **no password**: whoever reaches the port drives your radio
+> devices. Keep it on your local network, never open it to the Internet. Only
+> one program at a time can talk to the RFXtrx: stop Domoticz, Home Assistant
+> or RFXmngr if they use it (`kickolduser` hands it to the latest connection).
+
+## 2. Configure the integration
+
+| Field              | What to type                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Bridge host        | The IP of the ser2net machine. For the Gladys machine itself, its **LAN IP**: `localhost` is the container.                         |
+| Bridge TCP port    | `4001` in the examples above.                                                                                                       |
+| Protocols received | Nothing ticked: the RFXtrx keeps its own settings (made with RFXmngr). Otherwise the ticked protocols are sent at every connection. |
+| Minimum signal     | 0 offers everything. 3 or 4 keeps far emitters (the neighbours' probes) out of the new devices.                                     |
+| Actuators          | The receivers the RFXtrx drives — see part 4.                                                                                       |
+
+The connection status shows the receiver model, the firmware and the
+protocols received. **Test the connection** asks the RFXtrx again and gives
+its response time.
+
+The ticked protocols are **not saved** in the memory of the RFXtrx (it takes
+a limited number of writes): the integration sends them at every connection.
+Turn on only what you use, the receiver hears better: AC for Chacon DiO,
+Oregon for the probes and OWL, Visonic for Visonic detectors, X10, ARC for
+code-wheel remotes, Blyss…
+
+## 3. What is heard: the Discovery tab
+
+Nothing to declare: as soon as the RFXtrx hears an emitter, it appears in the
+**Discovery** tab. Create yours; values and scene triggers only go to the
+devices created. The list is kept in `/data` across restarts.
+
+- **Oregon Scientific and compatible probes** (THGR122, THGN132, THGR810,
+  BTHR968, PCR800, WGR800, UVN800…): temperature, humidity, pressure, rain
+  (total and rate), wind (direction, speed, gusts), UV.
+- **OWL meters**: power and energy index (kWh) of the CM119/CM160 and CM180,
+  current per phase and energy of the CM180i, currents of the CM113.
+- **Security1 detectors**: opening (X10, Visonic PowerCode), motion (X10,
+  Visonic, Meiantech) and smoke (KD101, SA30, RM174RF), with tamper. Motion
+  and smoke detectors never say "it is over": their state goes back to 0
+  after 90 seconds.
+- **Remotes, wall switches and keyfobs** (Chacon DiO / KlikAanKlikUit,
+  HomeEasy, X10, ARC, Blyss, LightwaveRF, X10 security, Visonic CodeSecure):
+  one **button** feature per button heard (`1`, `2`…; `group` for group
+  commands; `all` in X10; `K4` in Blyss; `alarm` on a keyfob). Its value is
+  the command received (on, off, arm, disarm, panic…).
+
+Every sensor has its **battery** (in %, 10 to 100; Oregon probes only know
+"good" 100 % and "low" 10 %) and its **signal** (0 to 5). A probe silent for
+an hour is shown unreachable.
+
+Oregon probes pick a new address at every battery change: the probe shows up
+again as a new device in Discovery.
+
+### Scene trigger
+
+**An RFXCOM remote is pressed**: filter on the remote, the button and the
+command. Variables: button, command, level (%), protocol, address. A press
+the remote repeats fires once.
+
+## 4. What is driven: the actuators
+
+A receiver (plug, light module, shutter motor) cannot be discovered over the
+air: it must be declared. The simplest way is the **Pair an actuator**
+button:
+
+1. put the receiver in learning mode: button held on a Chacon DiO plug (or
+   power it up), **PROG held on the original remote of a Somfy RTS shutter
+   until it jogs**;
+2. type a name, the kind, the protocol, and leave the address empty: a free
+   address is chosen;
+3. run the action: the RFXtrx sends the pairing frame ("on", or "program"
+   for Somfy RTS) and the receiver is added to the **Actuators** field.
+   Create it from the **Discovery** tab.
+
+| Kind      | What it does                                                         |
+| --------- | -------------------------------------------------------------------- |
+| `switch`  | On / off.                                                            |
+| `light`   | On / off, shown as a light.                                          |
+| `dimmer`  | On / off and brightness (AC / Chacon DiO, HomeEasy EU, LightwaveRF). |
+| `shutter` | Open / stop / close (Somfy RTS, RFY and RFYEXT protocols).           |
+
+You can also fill the field by hand, entries separated by `;`:
+
+```
+Living room shutter = shutter RFY 10203/1; Desk lamp = dimmer AC 1A2B3C4/2; Hall = switch X10 A3
+```
+
+| Protocols                                                  | Address                                      |
+| ---------------------------------------------------------- | -------------------------------------------- |
+| AC, HOMEEASY_EU, ANSLUT                                    | `id/unit`, e.g. `1A2B3C4/1` (0 = group)      |
+| RFY, RFYEXT (Somfy RTS)                                    | `id/unit`, e.g. `10203/1`                    |
+| LIGHTWAVERF, CONRAD, EMW100, BBSB, EURODOMEST, IT, KANGTAI | `id/unit`, e.g. `F09AC8/1`                   |
+| BLYSS                                                      | `id/group/unit`, e.g. `F09A/A/1`             |
+| X10, ARC, CHACON, ELRO, WAVEMAN…                           | `house+unit`, e.g. `A3`, set on the receiver |
+
+**Driving a receiver already paired with your remote**: declare the actuator
+with the address of that remote (shown in the parameters of its device:
+address `39AC7A1` and button `1` give `39AC7A1/1`), with "Send the pairing
+frame" unticked. When you use the remote, the state of the actuator follows
+in Gladys.
+
+**Somfy RTS**: the RFXtrx433E or 433XL plays a virtual remote whose rolling
+code it keeps; pair it once per shutter (step 1 above). Stop is the "my"
+button: it stops a moving shutter and sends a still one to its favourite
+position. The original RFXtrx433 (without E) does not transmit RFY.
+
+Radio orders are never confirmed by the receiver: Gladys shows what was sent.
 
 ## Troubleshooting
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- **"refused the connection"**: ser2net is not running, or not on this port
+  (`systemctl status ser2net`).
+- **"the bridge answers, but not the RFXtrx"**: the ser2net port is open but
+  the RFXtrx does not answer — unplugged, wrong device path, wrong speed (it
+  must be 38400), or another program uses it.
+- **"closed the connection"**: another program took over ser2net
+  (`kickolduser`).
+- **A remote or a probe does not show up**: is its protocol received
+  (connection status)? Is the minimum signal too high?
+- **Too many devices in Discovery**: raise the minimum signal, tick only the
+  protocols you use.
+- **A Somfy shutter does not move**: it must be paired once, PROG held on its
+  remote when pairing.
+
+Not supported yet: other shutter motors (Blinds1), chimes, thermostats,
+Lighting4 (PT2262), Linky / Cartelectronic TIC meters and the 868 MHz models.
+Tell us what you miss on the [Gladys forum](https://community.gladysassistant.com/).

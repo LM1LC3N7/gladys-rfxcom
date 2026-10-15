@@ -1,33 +1,44 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeConfig, DEFAULT_CONFIG } from '../src/config.js';
+import { normalizeConfig, parseHost } from '../src/config.js';
 
-test('normalizeConfig returns the defaults when called with no argument', () => {
-  assert.deepEqual(normalizeConfig(), DEFAULT_CONFIG);
+test('the defaults', () => {
+  assert.deepEqual(normalizeConfig(), {
+    host: null,
+    hostError: 'empty',
+    port: 4001,
+    protocols: [],
+    minSignal: 0,
+    actuatorsText: '',
+    actuators: [],
+    actuatorErrors: [],
+  });
 });
 
-test('normalizeConfig keeps user values over the defaults', () => {
-  const config = normalizeConfig({ latitude: 45.5, longitude: -73.6, unit: 'fahrenheit' });
-  assert.equal(config.latitude, 45.5);
-  assert.equal(config.longitude, -73.6);
-  assert.equal(config.unit, 'fahrenheit');
+test('the bridge address', () => {
+  assert.deepEqual(parseHost(' 192.168.1.10 '), { host: '192.168.1.10' });
+  assert.deepEqual(parseHost('tcp://rfx.lan:4002/'), { host: 'rfx.lan', port: 4002 });
+  assert.deepEqual(parseHost('localhost'), { error: 'localhost' });
+  assert.deepEqual(parseHost('127.0.0.1:4001'), { error: 'localhost' });
+  assert.deepEqual(parseHost('bad host!'), { error: 'invalid' });
+  assert.equal(normalizeConfig({ host: '10.0.0.2:5000', port: 4001 }).port, 5000);
 });
 
-test('normalizeConfig coerces numeric strings coming from a form', () => {
-  const config = normalizeConfig({ latitude: '48.8', longitude: '2.3', poll_frequency: '600' });
-  assert.equal(config.latitude, 48.8);
-  assert.equal(config.longitude, 2.3);
-  assert.equal(config.poll_frequency, 600);
-  assert.equal(typeof config.poll_frequency, 'number');
-});
-
-test('normalizeConfig falls back to the default for a missing numeric field', () => {
-  const config = normalizeConfig({ unit: 'celsius' });
-  assert.equal(config.poll_frequency, DEFAULT_CONFIG.poll_frequency);
-});
-
-test('GLADYS_PREFER_LOCAL defaults to true and only an explicit false disables it', () => {
-  assert.equal(normalizeConfig().GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: true }).GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: false }).GLADYS_PREFER_LOCAL, false);
+test('protocols, signal and actuators', () => {
+  const config = normalizeConfig({
+    host: '10.0.0.2',
+    port: '70000',
+    receiver_protocols: ['oregon', 'AC', 'AC', 'NOPE'],
+    min_signal: 40,
+    actuators: 'Volet = shutter RFY 10203/1; oops',
+  });
+  assert.equal(config.port, 65535);
+  assert.deepEqual(config.protocols, ['OREGON', 'AC']);
+  assert.equal(config.minSignal, 15);
+  assert.equal(config.actuators.length, 1);
+  assert.deepEqual(config.actuatorErrors, [{ entry: 'oops', error: 'syntax' }]);
+  assert.deepEqual(normalizeConfig({ host: 'a', receiver_protocols: 'X10, ARC' }).protocols, [
+    'X10',
+    'ARC',
+  ]);
 });

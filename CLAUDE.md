@@ -1,76 +1,76 @@
 # CLAUDE.md
 
-Project rules for coding assistants (Claude Code reads this file) and for human
-contributors.
+Project rules for coding assistants (Claude Code reads this file) and for
+human contributors. Read **[TODO.md](./TODO.md) first**: status, decisions
+already taken and the next milestones.
 
 ## What this is
 
-A Gladys Assistant **external integration**: a Node.js service (Node 22+, ESM,
-no build step) that runs in its own sandboxed Docker container and talks to
-Gladys through
-[`@gladysassistant/integration-sdk`](https://github.com/GladysAssistant/integration-sdk-js),
-its only runtime dependency. It started from the official JavaScript template.
+A Gladys Assistant **external integration** of type `device`: a Node.js
+service (Node 22+, ESM, no build step) in its own sandboxed Docker container,
+talking to Gladys through `@gladysassistant/integration-sdk` (v0.15). It
+connects over TCP to ser2net, which exposes an RFXCOM RFXtrx433/433E/433XL
+(38400 bauds), speaks the RFXtrx binary protocol, offers the emitters heard
+in the Discovery tab, drives the receivers the user declared, and fires the
+`remote_pressed` scene trigger. Not affiliated with RFXCOM.
 
 ## Commands
 
 ```bash
 npm install
 npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
+node --test test/app.test.js              # one file
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
 npm run format                            # Prettier, fix in place
+npm run audit                             # npm audit --omit=dev
 npx github:GladysAssistant/integration-store .   # store admission checks
 ```
 
-The CI (`.github/workflows/ci.yml`) runs `format:check`, `lint` and `test` on
-Node 22 and 24, and builds the Docker image: run the three commands before
-pushing.
+Run `format:check`, `lint`, `test` and `audit` before every commit.
 
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
-src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
-.github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
+index.js              SDK bootstrap only
+src/handlers.js       every SDK handler -> the app (shared with the tests)
+src/app.js            RfxcomApp: config, events -> states/triggers, commands,
+                      actions, transport badges
+src/link.js           RfxLink: the only network access (TCP to ser2net),
+                      handshake, command queue, keep-alive, reconnection
+src/protocol/         constants.js (types, subtypes, protocol bits),
+                      frames.js (stream -> packets), decode.js, encode.js (pure)
+src/devices.js        events -> readings -> Gladys devices (pure)
+src/actuators.js      the Actuators field, addresses, orders -> packets (pure)
+src/heard.js          the emitters heard, bounded, saved to /data
+src/publisher.js      states within the Gladys rate limit
+src/config.js         config_schema normalized
+src/constants.js      manifest keys, Gladys value enums, limits, timings
+src/i18n.js           runtime texts (en/fr)
+test/fixtures/        packets recorded from real devices (node-rfxcom tests)
+test/helpers/         a fake ser2net + RFXtrx on 127.0.0.1; Gladys is the SDK's fake
 ```
 
 ## Rules
 
-- **External ids are forever.** Build them with
-  `gladys.externalIds(type, platformId)`, `platformId` being the unique id the
-  platform gives the device (serial, cloud id, MAC), never a label. Gladys keys
-  devices, their history, scenes and dashboards on them: changing one creates a
-  new device and orphans the old one. The same goes for every key users store:
-  manifest `config_schema`, `actions`, widget and scene keys, feature keys.
-- **The container rootfs is read-only.** Write only under `/data`, the one
-  writable volume. Never log tokens, passwords or API keys.
-- **Versions belong to the Release workflow** (Actions → Release). Never edit
-  `version` in `package.json` or in the manifest, nor the `docker_image` tag,
-  by hand — except on the README's hand-pushed tag path, which bumps all three
-  together before tagging. `test/manifest.test.js` checks they agree.
-- **Changelog.** Every user-visible change adds a line under `## [Unreleased]`
-  in `CHANGELOG.md` (`### Added`, `Changed`, `Fixed`, `Removed`, `Security`).
-  Never write a version heading: the Release workflow moves the section, and it
-  becomes the notes of the GitHub Release.
-- **Manifest.** Texts are multi-language objects `{ "en": ..., "fr": ... }`:
-  `label`, `description` and `placeholder` alike, never a plain string. The
-  catalog `description` holds 10 to 100 characters per language. A field the
-  older cores do not know needs a higher `gladys_version` minimum
-  (`categories`: 4.86.0; `widgets`, `scene_triggers`, `scene_actions`,
-  `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
-  code (defaults, action, scene and widget handlers): change both sides
-  together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
-- **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
-  in English. Tests never touch the network.
+- **External ids are forever**: heard devices =
+  `<family>:<packet type>-<subtype>-<address>` (family `sensor`, `detector`,
+  `remote`), receivers = `actuator:<PROTOCOL>-<address>`; feature keys
+  (`temperature`, `button-1`, `binary`, `state`…). Never change how they are
+  built.
+- Manifest keys (`test_connection`, `pair_actuator` and its fields,
+  `remote_pressed` and its fields/variables, config keys) are frozen: users
+  store them.
+- The syntax of the `actuators` field is a user contract: extend it, never
+  break it.
+- Value enums come from Gladys core `server/utils/constants.js` (copied in
+  `src/constants.js`): cover -1/0/1, opening sensor 0 = open / 1 = closed,
+  BUTTON_STATUS.
+- Never send "save settings" (flash) to the RFXtrx: set mode at every
+  connection instead.
+- Container limits: 256 MB RAM, 0.5 CPU, read-only rootfs, only `/data`
+  writable, bridge network (unicast to the LAN only, no USB, no serial).
+- Gladys rate limits: 300 states/min, 300 scene events/min.
+- Code ported from node-rfxcom keeps its MIT notice
+  ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+- Code, comments, README in English; `docs/en.md` and `docs/fr.md` kept in sync.

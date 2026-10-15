@@ -1,177 +1,370 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "RFXCOM RFXtrx",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "RFXtrx433/433XL over ser2net: Oregon sensors, Chacon DiO remotes, Somfy RTS shutters, alarms.",
+    "fr": "RFXtrx433/433XL via ser2net : sondes Oregon, télécommandes DiO, volets Somfy RTS, alarmes."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-rfxcom:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-rfxcom/main/cover.png",
+  "categories": ["protocols", "lighting", "environment"],
+  "transports": ["local"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your RFXtrx, reached through the network",
+        "fr": "Votre RFXtrx, joint par le réseau"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "The integration runs in a sandboxed container that cannot open a USB port: plug the RFXtrx433 or RFXtrx433XL into a machine of your network (the Gladys machine, a Raspberry Pi…) and expose its serial port over TCP with ser2net, at 38400 bauds. Type that machine's LAN IP address below, not localhost. Sensors, detectors and remotes heard on the air appear in the Discovery tab; the receivers the RFXtrx drives (plugs, lights, Somfy RTS shutters) are declared below or with the \"Pair an actuator\" button. Not affiliated with RFXCOM.",
+        "fr": "L'intégration tourne dans un conteneur isolé qui ne peut pas ouvrir de port USB : branchez le RFXtrx433 ou RFXtrx433XL sur une machine de votre réseau (la machine de Gladys, un Raspberry Pi…) et exposez son port série en TCP avec ser2net, à 38400 bauds. Saisissez ci-dessous l'adresse IP de cette machine sur le réseau local, pas localhost. Les sondes, détecteurs et télécommandes entendus apparaissent dans l'onglet Découverte ; les récepteurs pilotés par le RFXtrx (prises, lampes, volets Somfy RTS) se déclarent ci-dessous ou avec le bouton « Appairer un actionneur ». Sans lien avec RFXCOM."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-rfxcom/blob/main/docs/fr.md",
+          "label": { "en": "Guide (French)", "fr": "Guide (français)" }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-rfxcom/blob/main/docs/en.md",
+          "label": { "en": "Guide (English)", "fr": "Guide (anglais)" }
+        },
+        {
+          "url": "https://github.com/cminyard/ser2net",
+          "label": { "en": "ser2net", "fr": "ser2net" }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
+      "key": "host",
+      "type": "string",
+      "label": { "en": "Bridge host", "fr": "Hôte de la passerelle" },
       "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+        "en": "IP address or name of the machine running ser2net. For the Gladys machine itself, its LAN IP address: localhost is the container of the integration.",
+        "fr": "Adresse IP ou nom de la machine qui fait tourner ser2net. Pour la machine de Gladys elle-même, son adresse IP sur le réseau local : localhost désigne le conteneur de l'intégration."
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "placeholder": { "en": "e.g. 192.168.1.10", "fr": "ex. 192.168.1.10" },
+      "required": true
     },
     {
-      "key": "longitude",
+      "key": "port",
       "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
+      "label": { "en": "Bridge TCP port", "fr": "Port TCP de la passerelle" },
       "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+        "en": "The TCP port ser2net listens on for the RFXtrx (4001 in the documentation examples).",
+        "fr": "Le port TCP sur lequel ser2net écoute pour le RFXtrx (4001 dans les exemples de la documentation)."
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
       "required": false,
-      "default": "celsius",
+      "default": 4001,
+      "min": 1,
+      "max": 65535
+    },
+    {
+      "key": "receiver_protocols",
+      "type": "multi_select",
+      "label": { "en": "Protocols received", "fr": "Protocoles reçus" },
+      "description": {
+        "en": "Leave everything unticked to keep the protocols already set in the RFXtrx (with RFXmngr). Ticked protocols replace them at every connection (not saved in the RFXtrx). Turn on only what you use: the receiver hears better, and fewer neighbours.",
+        "fr": "Ne cochez rien pour garder les protocoles déjà réglés dans le RFXtrx (avec RFXmngr). Les protocoles cochés les remplacent à chaque connexion (sans être enregistrés dans le RFXtrx). N'activez que ce que vous utilisez : le récepteur entend mieux, et moins de voisins."
+      },
+      "required": false,
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "AC",
+          "label": {
+            "en": "AC: Chacon DiO, KlikAanKlikUit, Nexa, Intertechno",
+            "fr": "AC : Chacon DiO, KlikAanKlikUit, Nexa, Intertechno"
+          }
+        },
+        {
+          "value": "ARC",
+          "label": {
+            "en": "ARC: code-wheel remotes (Chacon, Domia, KaKu…)",
+            "fr": "ARC : télécommandes à molettes (Chacon, Domia, KaKu…)"
+          }
+        },
+        { "value": "X10", "label": { "en": "X10", "fr": "X10" } },
+        { "value": "HOMEEASY", "label": { "en": "HomeEasy EU", "fr": "HomeEasy EU" } },
+        {
+          "value": "OREGON",
+          "label": { "en": "Oregon Scientific, OWL", "fr": "Oregon Scientific, OWL" }
+        },
+        {
+          "value": "VISONIC",
+          "label": { "en": "Visonic PowerCode, CodeSecure", "fr": "Visonic PowerCode, CodeSecure" }
+        },
+        { "value": "BLYSS", "label": { "en": "Blyss", "fr": "Blyss" } },
+        {
+          "value": "LIGHTWAVERF",
+          "label": { "en": "LightwaveRF, Siemens", "fr": "LightwaveRF, Siemens" }
+        },
+        {
+          "value": "MEIANTECH",
+          "label": { "en": "Meiantech, Atlantic, Aidebao", "fr": "Meiantech, Atlantic, Aidebao" }
+        },
+        { "value": "LACROSSE", "label": { "en": "La Crosse", "fr": "La Crosse" } },
+        { "value": "RUBICSON", "label": { "en": "Rubicson, Alecto", "fr": "Rubicson, Alecto" } },
+        {
+          "value": "FINEOFFSET",
+          "label": { "en": "Fine Offset, Viking", "fr": "Fine Offset, Viking" }
+        },
+        {
+          "value": "HIDEKI",
+          "label": { "en": "Hideki, TFA, Cresta, UPM", "fr": "Hideki, TFA, Cresta, UPM" }
+        },
+        { "value": "LEGRAND", "label": { "en": "Legrand CAD", "fr": "Legrand CAD" } },
+        { "value": "RSL", "label": { "en": "Conrad RSL", "fr": "Conrad RSL" } },
+        {
+          "value": "IMAGINTRONIX",
+          "label": { "en": "Imagintronix, Opus", "fr": "Imagintronix, Opus" }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
+      "key": "min_signal",
       "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "label": {
+        "en": "Minimum signal of a new emitter (0-15)",
+        "fr": "Signal minimum d'un nouvel émetteur (0-15)"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "An emitter heard for the first time with a weaker signal is not offered in Discovery: raise it to 3 or 4 to leave out the neighbours' probes. 0 offers everything. The devices already offered are never filtered.",
+        "fr": "Un émetteur entendu pour la première fois avec un signal plus faible n'est pas proposé dans Découverte : montez à 3 ou 4 pour écarter les sondes des voisins. 0 propose tout. Les appareils déjà proposés ne sont jamais filtrés."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": 0,
+      "min": 0,
+      "max": 15
+    },
+    {
+      "key": "actuators",
+      "type": "string",
+      "label": { "en": "Actuators", "fr": "Actionneurs" },
+      "description": {
+        "en": "The receivers the RFXtrx drives, separated by \";\": Name = kind PROTOCOL address. Kinds: switch, light, dimmer, shutter. Addresses: A1 (X10, ARC…), 1A2B3C4/1 (AC, HomeEasy, LightwaveRF, RFY), F09A/A/1 (Blyss). The \"Pair an actuator\" button fills this field for you.",
+        "fr": "Les récepteurs pilotés par le RFXtrx, séparés par « ; » : Nom = type PROTOCOLE adresse. Types : switch, light, dimmer, shutter. Adresses : A1 (X10, ARC…), 1A2B3C4/1 (AC, HomeEasy, LightwaveRF, RFY), F09A/A/1 (Blyss). Le bouton « Appairer un actionneur » remplit ce champ pour vous."
+      },
+      "placeholder": {
+        "en": "Living room shutter = shutter RFY 10203/1; Desk lamp = switch AC 1A2B3C4/1",
+        "fr": "Volet salon = shutter RFY 10203/1; Lampe bureau = switch AC 1A2B3C4/1"
+      },
+      "required": false
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
+      "key": "test_connection",
+      "label": { "en": "Test the connection", "fr": "Tester la connexion" },
+      "timeout_seconds": 20
     },
     {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
+      "key": "pair_actuator",
+      "label": { "en": "Pair an actuator", "fr": "Appairer un actionneur" },
+      "timeout_seconds": 30,
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "key": "pair_intro",
+          "type": "section",
+          "label": {
+            "en": "Declare and pair a receiver",
+            "fr": "Déclarer et appairer un récepteur"
+          },
+          "description": {
+            "en": "Put the receiver in learning mode first (button held on a Chacon DiO plug, PROG held on the remote of a Somfy RTS shutter until it jogs…), then run this action: the RFXtrx sends the pairing frame (\"on\", or \"program\" for RFY) and the receiver is added to the Actuators field. Leave the address empty to get a free one (not for X10 and the code-wheel protocols, whose address is set on the receiver).",
+            "fr": "Mettez d'abord le récepteur en mode apprentissage (bouton maintenu sur une prise Chacon DiO, PROG maintenu sur la télécommande d'un volet Somfy RTS jusqu'à ce qu'il bouge un peu…), puis lancez cette action : le RFXtrx envoie la trame d'appairage (« on », ou « program » en RFY) et le récepteur est ajouté au champ Actionneurs. Laissez l'adresse vide pour en obtenir une libre (sauf X10 et les protocoles à molettes, dont l'adresse se règle sur le récepteur)."
+          }
+        },
+        {
+          "key": "name",
+          "type": "string",
+          "label": { "en": "Name", "fr": "Nom" },
+          "placeholder": { "en": "Living room shutter", "fr": "Volet salon" },
           "required": true
+        },
+        {
+          "key": "kind",
+          "type": "select",
+          "label": { "en": "Kind", "fr": "Type" },
+          "required": true,
+          "default": "switch",
+          "options": [
+            { "value": "switch", "label": { "en": "Switch / plug", "fr": "Interrupteur / prise" } },
+            { "value": "light", "label": { "en": "Light (on/off)", "fr": "Lampe (marche/arrêt)" } },
+            {
+              "value": "dimmer",
+              "label": {
+                "en": "Dimmable light (AC, HomeEasy, LightwaveRF)",
+                "fr": "Lampe variable (AC, HomeEasy, LightwaveRF)"
+              }
+            },
+            {
+              "value": "shutter",
+              "label": { "en": "Shutter (Somfy RTS)", "fr": "Volet (Somfy RTS)" }
+            }
+          ]
+        },
+        {
+          "key": "protocol",
+          "type": "select",
+          "label": { "en": "Protocol", "fr": "Protocole" },
+          "required": true,
+          "default": "AC",
+          "options": [
+            {
+              "value": "AC",
+              "label": {
+                "en": "AC: Chacon DiO, KlikAanKlikUit, Nexa",
+                "fr": "AC : Chacon DiO, KlikAanKlikUit, Nexa"
+              }
+            },
+            { "value": "HOMEEASY_EU", "label": { "en": "HomeEasy EU", "fr": "HomeEasy EU" } },
+            { "value": "ANSLUT", "label": { "en": "Anslut", "fr": "Anslut" } },
+            {
+              "value": "RFY",
+              "label": { "en": "RFY: Somfy RTS", "fr": "RFY : Somfy RTS" }
+            },
+            {
+              "value": "RFYEXT",
+              "label": {
+                "en": "RFYEXT: Somfy RTS, units 0-15",
+                "fr": "RFYEXT : Somfy RTS, unités 0-15"
+              }
+            },
+            { "value": "BLYSS", "label": { "en": "Blyss", "fr": "Blyss" } },
+            { "value": "X10", "label": { "en": "X10", "fr": "X10" } },
+            { "value": "ARC", "label": { "en": "ARC (code wheels)", "fr": "ARC (molettes)" } },
+            {
+              "value": "CHACON",
+              "label": { "en": "Chacon EMW200", "fr": "Chacon EMW200" }
+            },
+            {
+              "value": "ELRO",
+              "label": { "en": "ELRO AB400D, Flamingo", "fr": "ELRO AB400D, Flamingo" }
+            },
+            { "value": "WAVEMAN", "label": { "en": "Waveman", "fr": "Waveman" } },
+            { "value": "IMPULS", "label": { "en": "Impuls", "fr": "Impuls" } },
+            { "value": "RISING_SUN", "label": { "en": "Rising Sun", "fr": "Rising Sun" } },
+            { "value": "PHILIPS_SBC", "label": { "en": "Philips SBC", "fr": "Philips SBC" } },
+            {
+              "value": "ENERGENIE_ENER010",
+              "label": { "en": "Energenie ENER010", "fr": "Energenie ENER010" }
+            },
+            {
+              "value": "ENERGENIE_5_GANG",
+              "label": { "en": "Energenie 5-gang", "fr": "Energenie 5 prises" }
+            },
+            { "value": "COCO", "label": { "en": "COCO GDR2", "fr": "COCO GDR2" } },
+            { "value": "HQ", "label": { "en": "HQ COCO-20", "fr": "HQ COCO-20" } },
+            { "value": "OASE_FM", "label": { "en": "Oase FM", "fr": "Oase FM" } },
+            {
+              "value": "LIGHTWAVERF",
+              "label": { "en": "LightwaveRF, Siemens", "fr": "LightwaveRF, Siemens" }
+            },
+            { "value": "CONRAD", "label": { "en": "Conrad RSL", "fr": "Conrad RSL" } },
+            {
+              "value": "EMW100",
+              "label": { "en": "EMW100, GAO, Everflourish", "fr": "EMW100, GAO, Everflourish" }
+            },
+            {
+              "value": "BBSB",
+              "label": { "en": "BBSB (new types)", "fr": "BBSB (nouveaux types)" }
+            },
+            { "value": "EURODOMEST", "label": { "en": "Eurodomest", "fr": "Eurodomest" } },
+            { "value": "IT", "label": { "en": "IT, FA500, PROmax", "fr": "IT, FA500, PROmax" } },
+            { "value": "KANGTAI", "label": { "en": "Kangtai, Cotech", "fr": "Kangtai, Cotech" } }
+          ]
+        },
+        {
+          "key": "address",
+          "type": "string",
+          "label": { "en": "Address (optional)", "fr": "Adresse (optionnelle)" },
+          "description": {
+            "en": "Empty: a free address is chosen. Otherwise A1 (X10, ARC…), 1A2B3C4/1 (AC, HomeEasy, LightwaveRF, RFY: identifier/unit) or F09A/A/1 (Blyss). To drive a receiver already paired with your own remote, type the address of that remote (shown in the parameters of its device).",
+            "fr": "Vide : une adresse libre est choisie. Sinon A1 (X10, ARC…), 1A2B3C4/1 (AC, HomeEasy, LightwaveRF, RFY : identifiant/unité) ou F09A/A/1 (Blyss). Pour piloter un récepteur déjà appairé à votre télécommande, saisissez l'adresse de cette télécommande (affichée dans les paramètres de son appareil)."
+          },
+          "placeholder": { "en": "e.g. 1A2B3C4/1", "fr": "ex. 1A2B3C4/1" },
+          "required": false
+        },
+        {
+          "key": "send_pairing",
+          "type": "boolean",
+          "label": {
+            "en": "Send the pairing frame",
+            "fr": "Envoyer la trame d'appairage"
+          },
+          "description": {
+            "en": "Untick to only declare a receiver already paired (or an X10 module).",
+            "fr": "Décochez pour seulement déclarer un récepteur déjà appairé (ou un module X10)."
+          },
+          "required": false,
+          "default": true
         }
       ]
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "remote_pressed",
+      "label": {
+        "en": "An RFXCOM remote is pressed",
+        "fr": "Une télécommande RFXCOM est actionnée"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "A remote, a wall switch or a keyfob heard by the RFXtrx (Chacon DiO, X10, Blyss, LightwaveRF, Visonic…), created as a device in Gladys.",
+        "fr": "Une télécommande, un interrupteur mural ou un porte-clés entendu par le RFXtrx (Chacon DiO, X10, Blyss, LightwaveRF, Visonic…), créé comme appareil dans Gladys."
       },
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": { "en": "Remote", "fr": "Télécommande" }
         },
         {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "key": "button",
+          "type": "string",
+          "label": {
+            "en": "Button (e.g. 1, group, all, B2, alarm)",
+            "fr": "Bouton (ex. 1, group, all, B2, alarm)"
+          }
+        },
+        {
+          "key": "command",
+          "type": "select",
+          "label": { "en": "Command", "fr": "Ordre" },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            { "value": "on", "label": { "en": "On", "fr": "Marche" } },
+            { "value": "off", "label": { "en": "Off", "fr": "Arrêt" } },
+            { "value": "group-on", "label": { "en": "Group on", "fr": "Groupe marche" } },
+            { "value": "group-off", "label": { "en": "Group off", "fr": "Groupe arrêt" } },
+            { "value": "all-on", "label": { "en": "All on", "fr": "Tout en marche" } },
+            { "value": "all-off", "label": { "en": "All off", "fr": "Tout à l'arrêt" } },
+            { "value": "level", "label": { "en": "Dimming level", "fr": "Niveau de variation" } },
+            { "value": "bright", "label": { "en": "Brighter", "fr": "Plus fort" } },
+            { "value": "dim", "label": { "en": "Dimmer", "fr": "Moins fort" } },
+            { "value": "chime", "label": { "en": "Chime", "fr": "Carillon" } },
+            { "value": "arm-away", "label": { "en": "Arm (away)", "fr": "Armer (absent)" } },
+            { "value": "arm-home", "label": { "en": "Arm (home)", "fr": "Armer (présent)" } },
+            { "value": "disarm", "label": { "en": "Disarm", "fr": "Désarmer" } },
+            { "value": "panic", "label": { "en": "Panic", "fr": "Panique" } }
           ]
         }
       ],
       "variables": [
+        { "key": "button", "type": "string", "label": { "en": "Button", "fr": "Bouton" } },
+        { "key": "command", "type": "string", "label": { "en": "Command", "fr": "Ordre" } },
         {
-          "key": "target",
-          "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
-        }
+          "key": "level",
+          "type": "number",
+          "label": { "en": "Level (%)", "fr": "Niveau (%)" }
+        },
+        { "key": "protocol", "type": "string", "label": { "en": "Protocol", "fr": "Protocole" } },
+        { "key": "address", "type": "string", "label": { "en": "Address", "fr": "Adresse" } }
       ]
-    }
-  ],
-  "scene_actions": [
-    {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
-      },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }
