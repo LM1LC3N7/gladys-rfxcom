@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-15
+
 ### Added
 
 - Connection to an RFXCOM RFXtrx433, RFXtrx433E or RFXtrx433XL exposed over
@@ -36,4 +38,5 @@ the notes of the version's GitHub Release.
 - The emitters heard are kept in `/data` across restarts; a sensor silent for
   an hour is shown unreachable.
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-rfxcom/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-rfxcom/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-rfxcom/releases/tag/v0.1.1
